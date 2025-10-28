@@ -9,46 +9,39 @@ import json
 
 # Configure page
 st.set_page_config(
-    page_title="Aramco AI Copilot",  # ← Change this
-    page_icon="🛢️",  # ← Change emoji
+    page_title="Offline Inspection AI Copilot",
+    page_icon="🔧",
     layout="wide"
 )
 
-# Add custom styling
-st.markdown("""
-<style>
-.stApp {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-.stButton>button {
-    background-color: #4CAF50;
-    color: white;
-    font-weight: bold;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🛢️ Aramco Inspection Intelligence")  # ← Change this
-st.markdown("**AI-Powered Corrosion Analysis & Risk Assessment**")  # ← Change this
+# Initialize session state
+if 'analysis_done' not in st.session_state:
+    st.session_state.analysis_done = False
+if 'df' not in st.session_state:
+    st.session_state.df = None
 
 def call_local_llm(prompt, context=""):
     """Call local Ollama LLM"""
-    try:
-        response = requests.post(
-            'http://localhost:11434/api/generate',
-            json={
-                'model': 'phi',
-                'prompt': f"{context}\n\n{prompt}",
-                'stream': False
-            },
-            timeout=30
-        )
-        if response.status_code == 200:
-            return response.json()['response']
-        else:
-            return "LLM unavailable. Running in analysis-only mode."
-    except:
-        return "LLM offline. Showing statistical analysis only."
+    # Try both localhost and container name
+    urls = ['http://ollama:11434/api/generate', 'http://localhost:11434/api/generate']
+    
+    for url in urls:
+        try:
+            response = requests.post(
+                url,
+                json={
+                    'model': 'phi',
+                    'prompt': f"{context}\n\n{prompt}",
+                    'stream': False
+                },
+                timeout=30
+            )
+            if response.status_code == 200:
+                return response.json()['response']
+        except:
+            continue
+    
+    return "LLM unavailable. Ensure Ollama is running: docker exec ollama_llm ollama pull phi"
 
 def analyze_inspection_data(df):
     """Run automated statistical analysis"""
