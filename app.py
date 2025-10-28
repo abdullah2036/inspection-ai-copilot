@@ -14,11 +14,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize session state
+# Initialize session state - MUST be at the very top after imports
 if 'analysis_done' not in st.session_state:
     st.session_state.analysis_done = False
 if 'df' not in st.session_state:
     st.session_state.df = None
+if 'uploaded_file_name' not in st.session_state:
+    st.session_state.uploaded_file_name = None
 
 def call_local_llm(prompt, context=""):
     """Call local Ollama LLM"""
@@ -151,15 +153,46 @@ st.markdown("**Secure, offline AI-powered analysis for industrial inspection dat
 st.sidebar.header("⚙️ Configuration")
 st.sidebar.markdown("### System Status")
 st.sidebar.success("✅ Python Libraries Loaded")
+
+# Check LLM status
+llm_status = "❌ LLM Offline"
+llm_color = "error"
 try:
-    requests.get('http://localhost:11434/api/tags', timeout=2)
-    st.sidebar.success("✅ LLM Online (Ollama)")
+    # Try container name first (for docker-compose networking)
+    response = requests.get('http://ollama:11434/api/tags', timeout=2)
+    if response.status_code == 200:
+        llm_status = "✅ LLM Online (Ollama)"
+        llm_color = "success"
 except:
-    st.sidebar.warning("⚠️ LLM Offline (Analysis mode only)")
+    try:
+        # Fallback to localhost
+        response = requests.get('http://localhost:11434/api/tags', timeout=2)
+        if response.status_code == 200:
+            llm_status = "✅ LLM Online (Ollama)"
+            llm_color = "success"
+    except:
+        llm_status = "⚠️ LLM Offline"
+        llm_color = "warning"
+
+if llm_color == "success":
+    st.sidebar.success(llm_status)
+elif llm_color == "warning":
+    st.sidebar.warning(llm_status)
+    st.sidebar.info("Run: `docker exec ollama_llm ollama pull phi`")
+else:
+    st.sidebar.error(llm_status)
 
 # File upload
 st.header("📁 Data Input")
 uploaded_file = st.file_uploader("Upload Inspection Data (CSV)", type=['csv'])
+
+if uploaded_file is not None:
+    # Only reload if it's a different file
+    if st.session_state.uploaded_file_name != uploaded_file.name:
+        st.session_state.df = pd.read_csv(uploaded_file)
+        st.session_state.uploaded_file_name = uploaded_file.name
+        st.session_state.analysis_done = False  # Reset analysis when new file uploaded
+        st.success(f"✅ File uploaded: {uploaded_file.name}")
 
 # Sample data generator
 if st.button("🧪 Generate Sample Inspection Data"):
@@ -176,13 +209,10 @@ if st.button("🧪 Generate Sample Inspection Data"):
         'inspector': np.random.choice(['John', 'Sarah', 'Mike', 'Emma'], 100)
     })
     st.session_state.df = sample_data
+    st.session_state.analysis_done = False  # Reset analysis for new data
     st.success("✅ Sample data generated!")
 
-if uploaded_file is not None:
-    st.session_state.df = pd.read_csv(uploaded_file)
-    st.success(f"✅ File uploaded: {uploaded_file.name}")
-
-# Analysis section
+# Analysis section - Check if we have data
 if st.session_state.df is not None:
     df = st.session_state.df
     
