@@ -9,16 +9,27 @@ import json
 
 # Configure page
 st.set_page_config(
-    page_title="Offline Inspection AI Copilot",
-    page_icon="🔧",
+    page_title="Aramco AI Copilot",  # ← Change this
+    page_icon="🛢️",  # ← Change emoji
     layout="wide"
 )
 
-# Initialize session state
-if 'analysis_done' not in st.session_state:
-    st.session_state.analysis_done = False
-if 'df' not in st.session_state:
-    st.session_state.df = None
+# Add custom styling
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.stButton>button {
+    background-color: #4CAF50;
+    color: white;
+    font-weight: bold;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🛢️ Aramco Inspection Intelligence")  # ← Change this
+st.markdown("**AI-Powered Corrosion Analysis & Risk Assessment**")  # ← Change this
 
 def call_local_llm(prompt, context=""):
     """Call local Ollama LLM"""
