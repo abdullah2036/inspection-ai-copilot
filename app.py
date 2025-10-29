@@ -7,14 +7,14 @@ from datetime import datetime
 import requests
 import json
 
-# Configure page
+# Configure page - MUST BE FIRST STREAMLIT COMMAND
 st.set_page_config(
     page_title="Offline Inspection AI Copilot",
     page_icon="🔧",
     layout="wide"
 )
 
-# Initialize session state - MUST be at the very top after imports
+# Initialize session state - IMMEDIATELY AFTER PAGE CONFIG
 if 'analysis_done' not in st.session_state:
     st.session_state.analysis_done = False
 if 'df' not in st.session_state:
@@ -24,7 +24,7 @@ if 'uploaded_file_name' not in st.session_state:
 
 def call_local_llm(prompt, context=""):
     """Call local Ollama LLM"""
-    # Try both localhost and container name
+    # Try container name first, then localhost
     urls = ['http://ollama:11434/api/generate', 'http://localhost:11434/api/generate']
     
     for url in urls:
@@ -40,10 +40,10 @@ def call_local_llm(prompt, context=""):
             )
             if response.status_code == 200:
                 return response.json()['response']
-        except:
+        except Exception as e:
             continue
     
-    return "LLM unavailable. Ensure Ollama is running: docker exec ollama_llm ollama pull phi"
+    return "❌ LLM unavailable. Run: docker exec ollama_llm ollama pull phi"
 
 def analyze_inspection_data(df):
     """Run automated statistical analysis"""
@@ -150,6 +150,7 @@ def generate_visualizations(df):
 st.title("🔧 Offline Inspection AI Copilot")
 st.markdown("**Secure, offline AI-powered analysis for industrial inspection data**")
 
+# Sidebar
 st.sidebar.header("⚙️ Configuration")
 st.sidebar.markdown("### System Status")
 st.sidebar.success("✅ Python Libraries Loaded")
@@ -158,7 +159,7 @@ st.sidebar.success("✅ Python Libraries Loaded")
 llm_status = "❌ LLM Offline"
 llm_color = "error"
 try:
-    # Try container name first (for docker-compose networking)
+    # Try container name first
     response = requests.get('http://ollama:11434/api/tags', timeout=2)
     if response.status_code == 200:
         llm_status = "✅ LLM Online (Ollama)"
@@ -184,17 +185,8 @@ else:
 
 # File upload
 st.header("📁 Data Input")
-uploaded_file = st.file_uploader("Upload Inspection Data (CSV)", type=['csv'])
 
-if uploaded_file is not None:
-    # Only reload if it's a different file
-    if st.session_state.uploaded_file_name != uploaded_file.name:
-        st.session_state.df = pd.read_csv(uploaded_file)
-        st.session_state.uploaded_file_name = uploaded_file.name
-        st.session_state.analysis_done = False  # Reset analysis when new file uploaded
-        st.success(f"✅ File uploaded: {uploaded_file.name}")
-
-# Sample data generator
+# Sample data generator FIRST
 if st.button("🧪 Generate Sample Inspection Data"):
     np.random.seed(42)
     dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
@@ -209,8 +201,23 @@ if st.button("🧪 Generate Sample Inspection Data"):
         'inspector': np.random.choice(['John', 'Sarah', 'Mike', 'Emma'], 100)
     })
     st.session_state.df = sample_data
-    st.session_state.analysis_done = False  # Reset analysis for new data
+    st.session_state.analysis_done = False
     st.success("✅ Sample data generated!")
+    st.rerun()
+
+# File uploader
+uploaded_file = st.file_uploader("Upload Inspection Data (CSV)", type=['csv'])
+
+if uploaded_file is not None:
+    # Only reload if it's a different file
+    if st.session_state.uploaded_file_name != uploaded_file.name:
+        try:
+            st.session_state.df = pd.read_csv(uploaded_file)
+            st.session_state.uploaded_file_name = uploaded_file.name
+            st.session_state.analysis_done = False
+            st.success(f"✅ File uploaded: {uploaded_file.name}")
+        except Exception as e:
+            st.error(f"Error loading file: {str(e)}")
 
 # Analysis section - Check if we have data
 if st.session_state.df is not None:
@@ -260,9 +267,8 @@ if st.session_state.df is not None:
         context = f"""You are an expert in industrial inspection and corrosion analysis.
 Analyze this inspection dataset:
 - Total records: {analysis['total_records']}
-- Features: {', '.join(analysis['columns'])}
+- Features: {', '.join(analysis['columns'][:10])}
 - Anomalies detected: {analysis['anomalies']}
-- Missing data: {analysis['missing_data']}
 
 Provide actionable insights for engineers."""
         
